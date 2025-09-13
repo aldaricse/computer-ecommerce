@@ -20,12 +20,9 @@ export async function POST(request: NextRequest) {
     const user = await prisma.user.findUnique({
       where: { email }
     })
-    console.log(user);
-    
 
     if (!user || !(await verifyPassword(password, user.password))) {
-      console.log("aqiii");
-      
+
       return NextResponse.json(
         { error: 'Credenciales inválidas' },
         { status: 401 }
