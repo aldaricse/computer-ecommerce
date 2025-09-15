@@ -59,7 +59,7 @@ function PaymentForm({ clientSecret }: PaymentFormProps) {
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">
           <PaymentElement />
-          
+
           {error && (
             <div className="text-sm text-destructive bg-destructive/10 p-3 rounded">
               {error}
@@ -91,6 +91,12 @@ export default function CheckoutForm({ stripePromise }: CheckoutFormProps) {
   const { items, total } = useCartStore()
   const { isAuthenticated } = useAuthStore()
   const router = useRouter()
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -136,10 +142,10 @@ export default function CheckoutForm({ stripePromise }: CheckoutFormProps) {
       }
     }
 
-    createPaymentIntent()
-  }, [items, total, isAuthenticated, router])
+    if(mounted) createPaymentIntent()
+  }, [mounted, isAuthenticated])
 
-  if (loading) {
+  if (!mounted || loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
@@ -154,8 +160,8 @@ export default function CheckoutForm({ stripePromise }: CheckoutFormProps) {
     return (
       <div className="text-center py-12">
         <p className="text-destructive text-lg">{error}</p>
-        <Button 
-          onClick={() => router.push('/cart')} 
+        <Button
+          onClick={() => router.push('/cart')}
           className="mt-4"
         >
           Volver al carrito

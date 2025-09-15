@@ -21,61 +21,91 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  console.log('Received Stripe event:', event);
-
   try {
     switch (event.type) {
       case 'payment_intent.succeeded':
         const paymentIntent = event.data.object as Stripe.PaymentIntent
-        
-        // Create order and sales records
         const userId = paymentIntent.metadata.userId
-        const items = JSON.parse(paymentIntent.metadata.items)
-
-        const order = await prisma.order.create({
-          data: {
-            userId,
-            total: paymentIntent.amount / 100, // Convert from cents
-            status: 'PROCESSING'
-          }
-        })
-
-        // Create order items and sales
-        for (const item of items) {
-          await prisma.orderItem.create({
-            data: {
-              orderId: order.id,
-              productId: item.id,
-              quantity: item.quantity,
-              price: item.price
-            }
-          })
-
-          await prisma.sale.create({
-            data: {
-              orderId: order.id,
-              userId,
-              productId: item.id,
-              quantity: item.quantity,
-              unitPrice: item.price,
-              totalPrice: item.price * item.quantity,
-              stripePaymentId: paymentIntent.id,
-              paymentStatus: 'COMPLETED'
-            }
-          })
-
-          // Update product stock
-          await prisma.product.update({
-            where: { id: item.id },
-            data: {
-              stock: {
-                decrement: item.quantity
-              }
-            }
-          })
+        
+        if (!userId) {
+          console.error('❌ No userId in metadata')
+          return NextResponse.json({ error: 'No userId provided' }, { status: 400 })
         }
 
-        console.log('Payment succeeded and order created:', order.id)
+        // Verificar si existe el usuario
+        const user = await prisma.user.findUnique({
+          where: { id: userId }
+        })
+
+        if (!user) {
+          console.error('❌ User not found:', userId)
+          return NextResponse.json({ error: 'User not found' }, { status: 400 })
+        }
+
+        const items = JSON.parse(paymentIntent.metadata.items)
+        console.log('Processing payment intent:', paymentIntent.id)
+
+        // ✅ Usar transacción para operación atómica
+        try {
+          await prisma.$transaction(async (tx) => {
+            // Verificar dentro de la transacción
+            const existingSale = await tx.sale.findFirst({
+              where: { stripePaymentId: paymentIntent.id }
+            })
+
+            if (existingSale) {
+              console.log('Payment already processed in transaction:', paymentIntent.id)
+              return // Salir de la transacción sin error
+            }
+
+            // Crear orden
+            const order = await tx.order.create({
+              data: {
+                userId,
+                total: paymentIntent.amount / 100,
+                status: 'PROCESSING'
+              }
+            })
+
+            // Crear sale
+            await tx.sale.create({
+              data: {
+                orderId: order.id,
+                userId,
+                stripePaymentId: paymentIntent.id,
+                paymentStatus: 'COMPLETED',
+              }
+            })
+
+            // Crear order items y actualizar stock
+            for (const item of items) {
+              await tx.orderItem.create({
+                data: {
+                  orderId: order.id,
+                  productId: item.id,
+                  quantity: item.quantity,
+                  price: item.price
+                }
+              })
+
+              await tx.product.update({
+                where: { id: item.id },
+                data: {
+                  stock: {
+                    decrement: item.quantity
+                  }
+                }
+              })
+            }
+
+            console.log('Payment succeeded and order created:', order.id)
+          })
+        } catch (transactionError) {
+          // Si la transacción falla, probablemente por duplicación
+          console.log('Transaction failed, likely duplicate:', paymentIntent.id)
+          return NextResponse.json({ received: true })
+        }
+
         break
 
       default:

@@ -35,11 +35,13 @@ export async function POST(request: NextRequest) {
       name: string;
       price: number;
       image: string;
+      quantity: number;
     }) => ({
       id: item.id,
       name: item.name,
       price: item.price,
       image: item.image,
+      quantity: item.quantity
     }))
 
     const paymentIntent = await stripe.paymentIntents.create({

@@ -38,7 +38,6 @@ model Product {
   updatedAt   DateTime @updatedAt
 
   orderItems OrderItem[]
-  sales      Sale[]
 
   @@map("products")
 }
@@ -72,21 +71,16 @@ model OrderItem {
 }
 
 model Sale {
-  id               String     @id @default(cuid())
-  orderId          String     @unique
-  userId           String
-  productId        String
-  quantity         Int
-  unitPrice        Float
-  totalPrice       Float
-  stripePaymentId  String?
-  paymentStatus    PaymentStatus @default(PENDING)
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
+  id              String        @id @default(cuid())
+  orderId         String        @unique
+  userId          String
+  stripePaymentId String       @unique
+  paymentStatus   PaymentStatus @default(PENDING)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
-  order   Order   @relation(fields: [orderId], references: [id])
-  user    User    @relation(fields: [userId], references: [id])
-  product Product @relation(fields: [productId], references: [id])
+  order Order @relation(fields: [orderId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
 
   @@map("sales")
 }
